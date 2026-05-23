@@ -8,17 +8,18 @@ class WorkflowManager:
         self.job_id = job_id
         self.headers = {"Authorization": f"Bearer {self.token}"}
 
-    def trigger_workflow(self, config_catalog, source_catalog, config, src, table):
+    def trigger_workflow(self, config, full_table_name, receipient_email):
+        
         api_url = f"https://{self.hostname}/api/2.1/jobs/run-now"
         payload = {
             "job_id": self.job_id,
             "job_parameters": {
-                "config_catalog_name": config_catalog,
-                "source_catalog_name": source_catalog,
-                "config_schema_name": config,
-                "source_schema_name": src,
-                "target_schema_name": "dqx_silver",
-                "table_name": table
+                "config_catalog_name": config.get('DEFAULT', 'dqx_config_catalog'),
+                "config_schema_name": config.get('DEFAULT', 'dqx_config_schema'),
+                "target_schema_name": f"dqx_{full_table_name.split('.')[1]}",
+                "table_name": full_table_name,
+                "email_sender":config.get('EMAIL', 'address'),
+                "email_recipient": ','.join([receipient_email.strip()] + [e.strip() for e in config.get('EMAIL', 'copy_to').split(',') if e.strip()])
             }
         }
         response = requests.post(api_url, headers=self.headers, json=payload)

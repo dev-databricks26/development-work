@@ -8,13 +8,14 @@ import json
 from datetime import date, datetime
 import time
 import pandas as pd
+import configparser
 
 
 class dqx_handler:
-    def __init__(self, spark_session):
+    def __init__(self, spark_session, config):
         self.spark = spark_session
         self.ws = WorkspaceClient()
-        self.llm_cfg = LLMModelConfig("databricks/databricks-meta-llama-3-3-70b-instruct")
+        self.llm_cfg = LLMModelConfig(config.get('AI_ASSISTANT', 'llm_model'))
         self.profiler = DQProfiler(workspace_client=self.ws, llm_model_config=self.llm_cfg)
         self.generator = DQGenerator(self.ws, llm_model_config=self.llm_cfg)
         self.profile_data_path = os.path.join(os.getcwd(), "profile_data")
@@ -102,10 +103,12 @@ class dqx_handler:
 
 
 if __name__ == "__main__":
-    handler = dqx_handler(spark)
+    config = configparser.ConfigParser()
+    config.read('/Workspace/Repos/dev.databricks26@gmail.com/dqx/app/dqx-validator-app-v02/config.conf')
+    handler = dqx_handler(spark, config)
     print(handler.ws.config.host)
     print(handler.ws.config.token)
-    tbl = 'dqx_sandbox.dqx_bronze.product'
+    tbl = 'dqx_poc.silver.product'
     inp = """
     Phone numbers should follow standard format.
     customer_email is valid.

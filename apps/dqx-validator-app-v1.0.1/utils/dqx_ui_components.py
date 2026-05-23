@@ -5,11 +5,11 @@ from sqlglot import parse_one, exp
 
 
 class DqxUIComponents:
-    def __init__(self, db_manager, dqx_h , config_catalog , config_schema):
+    def __init__(self, db_manager, dqx_h , config):
         self.db = db_manager
         self.dqx = dqx_h
-        self.config_catalog = config_catalog
-        self.config_schema = config_schema
+        self.config_catalog = config.get('DEFAULT', 'dqx_config_catalog')
+        self.config_schema =  config.get('DEFAULT', 'dqx_config_schema')
         
     def extract_column_names(self, data):
         expression = data.get('arguments', {}).get('expression', '')

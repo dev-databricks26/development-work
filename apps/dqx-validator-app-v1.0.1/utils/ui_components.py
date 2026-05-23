@@ -6,11 +6,11 @@ import re
 
 
 class UIComponents:
-    def __init__(self, db_manager, workflow_manager, config_catalog, config_schema):
+    def __init__(self, db_manager, workflow_manager, config):
         self.db = db_manager
         self.wm = workflow_manager
-        self.config_catalog = config_catalog
-        self.config_schema = config_schema
+        self.config_catalog =  config.get('DEFAULT', 'dqx_config_catalog')
+        self.config_schema  =  config.get('DEFAULT', 'dqx_config_schema')
 
 
     def reset_configuration_form(self):

@@ -95,7 +95,7 @@ class DatabaseManager:
         ) 
         SELECT * FROM ranked_rules
         WHERE row_num = 1 
-        and (column is not null or trim(column) != '')
+        and (column is not null and trim(column) != '')
         """
         with _self.get_connection().cursor() as cursor:
             cursor.execute(query)
@@ -236,13 +236,12 @@ class DatabaseManager:
 
 if __name__ == "__main__":
     # --- 2. Load Config & Profile ---
-    env = 'DEV'
     config = configparser.ConfigParser()
     config.read('/Workspace/Repos/dev.databricks26@gmail.com/dqx/app/dqx-validator-app-v02/config.conf')
     # Extract variables based on selection
-    HOST = config.get(env, 'server_hostname')
-    PATH = config.get(env, 'http_path')
-    TOKEN = config.get(env, 'token')
+    HOST = config.get('SQL', 'server_hostname')
+    PATH = config.get('SQL', 'http_path')
+    TOKEN = config.get('SQL', 'token')
     db_manager = DatabaseManager(HOST, PATH, TOKEN)
     rule_defs_df = db_manager.fetch_dqx_mappings('dqx_sandbox', 'dqx_config', 'dqx_sandbox','dqx_bronze','payment')
     print(rule_defs_df)

@@ -78,18 +78,17 @@ st.markdown("""
 
 
 # --- 2. Load Config & Profile ---
-env = 'DEV'
 config = configparser.ConfigParser()
 config.read('config.conf')
 
-
 # Extract variables based on selection
-HOST = config.get(env, 'server_hostname')
-PATH = config.get(env, 'http_path')
-TOKEN = config.get(env, 'token')
-JOB_ID = config.get(env, 'job_id')
-config_catalog = config.get('DEFAULT', 'dqx_catalog_name')
-config_schema = config.get('DEFAULT', 'dqx_config_schema')
+HOST = config.get('SQL', 'server_hostname')
+PATH = config.get('SQL', 'http_path')
+TOKEN = config.get('SQL', 'token')
+JOB_ID = config.get('SQL', 'job_id')
+config_catalog =  config.get('DEFAULT', 'dqx_config_catalog')
+config_schema  =  config.get('DEFAULT', 'dqx_config_schema')
+ignore_schemas_list = config.get('DEFAULT', 'ignore_schemas').split('|')
 
 
 # --- 3. Initialize Managers ---
@@ -106,10 +105,10 @@ def get_spark():
 
 try:
     db, wm = init_base_managers()
-    dqx_h = dqx_handler(get_spark()) 
-    ui = UIComponents(db, wm, config_catalog, config_schema)
-    dqx_ui = DqxUIComponents(db, dqx_h, config_catalog, config_schema)
-    ui_submit = UISubmitComponents(db, dqx_h, wm, config_catalog, config)
+    dqx_h = dqx_handler(get_spark(), config) 
+    ui = UIComponents(db, wm, config)
+    dqx_ui = DqxUIComponents(db, dqx_h, config)
+    ui_submit = UISubmitComponents(db, dqx_h, wm, config)
 
     StateManager.initialize()
 
@@ -138,7 +137,7 @@ try:
             schemas += db.fetch_schemas(cat_select)
         schema_select = st.selectbox(
             "Schema", 
-            options=[s for s in schemas if not (s.startswith("dqx_") or '_dqx' in s.lower())], 
+            options=[s for s in schemas if not (s.startswith("dqx_") or '_dqx' in s.lower() or s in ignore_schemas_list)],
             key="schema_select"
         )
         

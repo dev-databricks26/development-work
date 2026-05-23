@@ -10,13 +10,14 @@ from email.mime.multipart import MIMEMultipart
 
 
 class UISubmitComponents:
-    def __init__(self, db_manager, dqx_h , workflow_manager, config_catalog, config):
+    def __init__(self, db_manager, dqx_h , workflow_manager, config):
         self.db = db_manager
         self.wm = workflow_manager
         self.dqx = dqx_h
         self.config = config
-        self.config_catalog = self.config.get('DEFAULT', 'dqx_catalog_name')
-        self.config_schema = self.config.get('DEFAULT', 'dqx_config_schema')
+        self.config_catalog = self.config.get('DEFAULT', 'dqx_config_catalog')
+        self.config_schema =  self.config.get('DEFAULT', 'dqx_config_schema')
+    
     
     def get_logged_in_user_email(self, default_email):
         """Extracts the logged-in user's email from Databricks App headers."""
@@ -32,33 +33,65 @@ class UISubmitComponents:
             user_email = default_email
         return user_email
 
-    def send_success_email(self, recipient_email, run_id, run_url, table_name):
-        smtp_server = "smtp.gmail.com"
-        smtp_port = 587
+
+    def send_email(self, default_email, run_id, run_url, table_name):
+        smtp_server = self.config.get('EMAIL', 'smtp_server')
+        smtp_port = self.config.get('EMAIL', 'smtp_port')
         sender_email = self.config.get('EMAIL', 'address')
         sender_password = self.config.get('EMAIL', 'password')
+        cc_email = self.config.get('EMAIL', 'copy_to')
+        cc_email_list = [c.strip() for c in cc_email.split(',')]
         
-        # Capture the original fallback email for CC
-        cc_email = recipient_email
-
         # Automatically identify the logged-in user
-        recipient_email = self.get_logged_in_user_email(cc_email)
+        recipient_email = self.get_logged_in_user_email(default_email)
         print("recipient_email ==> ", recipient_email)
 
-        subject = f"🚀 DQX Workflow Triggered: {table_name}"
+        subject = f"DQX Check Triggered for Table | {table_name}"
+        # --- Dynamic Rows Generation for the Box ---
+        run_details = {
+            "Workspace": f"{self.config.get('DEFAULT', 'workspace_url')}",
+            "Job": f"DQX_Run_Checks [{self.config.get('SQL', 'job_id')}]",
+            "Job Run": run_id,
+            "Status": "Triggered"
+        }
+        table_rows = ""
+        for key, value in run_details.items():
+            table_rows += f"""
+            <tr>
+                <td style='padding: 8px 0; font-weight: bold; color: #5f6368; width: 30%;'>{key}</td>
+                <td style='padding: 8px 0; color: #202124;'>{value}</td>
+            </tr>
+            """
+
+        # --- HTML Body Construction ---
+        status_color = "#2e7d32"
+        message = "DQX Execution Started"
         body = f"""
         <html>
-        <body style="font-family: Arial, sans-serif;">
-            <h3 style="color: #2e7d32;">DQX Execution Started</h3>
-            <p>A Data Quality workflow has been successfully triggered for the table: <b>{table_name}</b>.</p>
-            <hr>
-            <p><b>Run Details:</b></p>
-            <ul>
-            <li><b>Run ID:</b> {run_id}</li>
-            <li><b>Status:</b> Triggered</li>
-            </ul>
-            <p><a href="{run_url}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View Databricks Run</a></p>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            
+            <!-- Header Section -->
+            <h2 style="color: {status_color}; font-size: 24px; margin-bottom: 5px;">
+                {message}
+            </h2>
+            <h3 style="font-size: 20px; color: #202124; margin-top: 0; margin-bottom: 20px;">
+                Run details:
+            </h3>
+            
+            <!-- Square Box Container -->
+            <div style="border: 2px solid #dadce0; border-radius: 8px; padding: 20px; max-width: 600px; background-color: #f8f9fa;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                    <tbody>
+                        <tr>
+                            <td style='padding: 8px 0; font-weight: bold; color: #5f6368; width: 30%;'>Table Target</td>
+                            <td style='padding: 8px 0; color: #202124; font-weight: bold;'>{table_name}</td>
+                        </tr>
+                        {table_rows}
+                    </tbody>
+                </table>
+            </div>
             <p style="font-size: 0.8em; color: #666;">This is an automated notification from the DQX UI.</p>
+            <p><a href="{run_url}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View Databricks Run</a></p>
         </body>
         </html>
         """
@@ -66,22 +99,22 @@ class UISubmitComponents:
         msg = MIMEMultipart()
         msg['From'] = sender_email
         msg['To'] = recipient_email
-        msg['Cc'] = cc_email
+        msg['Cc'] = ','.join(cc_email_list)
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'html'))
 
         # Combine recipients into a unique list of strings for SMTP transmission
-        to_addrs = list(set(filter(None, [recipient_email, cc_email])))
-
+        to_addrs = list(set([recipient_email] + cc_email_list))
         try:
             with smtplib.SMTP(smtp_server, smtp_port) as server:
                 server.starttls()
                 server.login(sender_email, sender_password)
                 server.send_message(msg, to_addrs=to_addrs)
-            return True, "Email sent successfully"
+            return True, recipient_email, "Email sent successfully"
         except Exception as e:
             st.error(f"Failed to send email: {e}")
             return False, str(e)
+
 
     def render_submit(self, cat, schema, table):
         st.divider()
@@ -150,7 +183,11 @@ class UISubmitComponents:
         if st.button("Apply/Run DQ Rules", type="primary", disabled=not has_rules, use_container_width=True):
             with st.spinner("🚀 Running Workflow to Apply Rules..."):
                 try:
-                    resp = self.wm.trigger_workflow(self.config_catalog, cat, self.config_schema, schema, table)
+                    resp = self.wm.trigger_workflow(
+                                self.config, 
+                                f"{cat}.{schema}.{table}",
+                                self.get_logged_in_user_email(self.config.get('EMAIL', 'address'))
+                            )
                     if resp.status_code == 200:
                         run_id = resp.json().get('run_id')
                         run_resp = self.wm.get_run_status(run_id)
@@ -158,8 +195,13 @@ class UISubmitComponents:
                         
                         # send email and capture status
                         try:
-                            self.send_success_email('dev.databricks26@gmail.com', run_id, run_page_url, f"{cat}.{schema}.{table}")
-                            email_status = "✅ Email sent successfully!"
+                            run_status, recipient_email, email_msg = self.send_email(
+                                self.config.get('EMAIL', 'address'), 
+                                run_id, 
+                                run_page_url, 
+                                f"{cat}.{schema}.{table}"
+                            )
+                            email_status = f"✅ Email sent successfully to {recipient_email}!"
                         except Exception:
                             email_status = "❌ Email notification failed to send."
 
@@ -185,4 +227,4 @@ class UISubmitComponents:
 
 # if __name__ == "__main__":
 #     UISubmitComponents()
-#     send_success_email('dev.databricks26@gmail.com', 'test_run_id', 'test_run_page_url', 'test_table')
+#     send_email('dev.databricks26@gmail.com', 'test_run_id', 'test_run_page_url', 'test_table')
