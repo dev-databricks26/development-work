@@ -1,0 +1,7 @@
+pandas~=2.2.3
+streamlit
+databricks-sql-connector
+databricks.connect
+databricks-labs-dqx==0.13.0
+databricks-labs-dqx[llm]
+sqlglot
