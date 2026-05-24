@@ -239,7 +239,9 @@ try:
         # Initialize session state for navigation
         if 'step' not in st.session_state:
             st.session_state.step = 0
-
+        if 'is_loading' not in st.session_state:
+            st.session_state.is_loading = False
+            
         # 2. Visual Progress Bar (Non-clickable tabs)
         cols = st.columns(len(wizard_steps))
         for i, step_label in enumerate(wizard_steps):
