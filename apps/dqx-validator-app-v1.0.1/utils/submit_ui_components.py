@@ -67,8 +67,8 @@ class UISubmitComponents:
         subject = f"DQX Check Triggered for Table | {table_name}"
         # --- Dynamic Rows Generation for the Box ---
         run_details = {
-            "Workspace": f"{self.config.get('DEFAULT', 'workspace_url')}",
-            "Job": f"DQX_Run_Checks [{self.config.get('SQL', 'job_id')}]",
+            "Workspace": f"{self.config.get('WORKSPACE', 'workspace_url')}",
+            "Job": f"DQX_Run_Checks [{self.config.get('WORKSPACE', 'job_id')}]",
             "Job Run": run_id,
             "Status": "Triggered"
         }
@@ -231,8 +231,8 @@ class UISubmitComponents:
                                 dqx_mapped_df
                             )
                             email_status = f"✅ Email sent successfully to {recipient_email}!"
-                        except Exception:
-                            email_status = "❌ Email notification failed to send."
+                        except Exception as email_error:
+                            email_status = f"❌ Email notification failed to send. {email_error}"
 
                         # 2. Save everything into session state
                         st.session_state.workflow_result = {

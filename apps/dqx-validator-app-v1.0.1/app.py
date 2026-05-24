@@ -82,21 +82,25 @@ config = configparser.ConfigParser()
 config.read('config.conf')
 
 # Extract variables based on selection
-HOST = config.get('SQL', 'server_hostname')
-PATH = config.get('SQL', 'http_path')
-TOKEN = config.get('SQL', 'token')
-JOB_ID = config.get('SQL', 'job_id')
-config_catalog =  config.get('DEFAULT', 'dqx_config_catalog')
-config_schema  =  config.get('DEFAULT', 'dqx_config_schema')
+config_catalog      =  config.get('DEFAULT', 'dqx_config_catalog')
+config_schema       =  config.get('DEFAULT', 'dqx_config_schema')
 ignore_schemas_list = config.get('DEFAULT', 'ignore_schemas').split('|')
+
+host        = config.get('SQL', 'server_hostname')
+http_path   = config.get('SQL', 'http_path')
+db_token    = config.get('SQL', 'token')
+
+workspace_url   = config.get('WORKSPACE', 'workspace_url')
+job_id          = config.get('WORKSPACE', 'job_id')
+dashboard_id    = config.get('WORKSPACE', 'dashboard_id')
 
 
 # --- 3. Initialize Managers ---
 @st.cache_resource(show_spinner='Initializing Core Services...')
 def init_base_managers():
     return (
-        DatabaseManager(HOST, PATH, TOKEN), 
-        WorkflowManager(HOST, TOKEN, JOB_ID)
+        DatabaseManager(host, http_path, db_token), 
+        WorkflowManager(host, db_token, job_id)
     )
 
 def get_spark():
@@ -160,25 +164,25 @@ try:
         st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
         st.markdown("#### 🔗 Quick Links")
         st.markdown(
-            """
+            f"""
             <style>
-                .dqx-link {
+                .dqx-link {{
                     text-decoration: none;
                     display: flex;
                     align-items: center;
                     font-size: 16px;
                     margin-bottom: 8px;
                     transition: text-decoration 0.2s;
-                }
-                .dqx-link:hover {
+                }}
+                .dqx-link:hover {{
                     text-decoration: underline;
-                }
+                }}
             </style>
-            <a href="https://dbc-4b58157d-c7bb.cloud.databricks.com/dashboardsv3/01f14ecddf181108b9e2252c5a21a410/published?o=7474648480850274" target="_blank" class="dqx-link">
+            <a href="{workspace_url}/dashboardsv3/{dashboard_id}/published" target="_blank" class="dqx-link">
                 <span style="font-size:20px; margin-right:6px;">📊</span>
                 <span style="font-size:16px;">Data Quality Dashboard</span>
             </a>
-            <a href="https://dbc-4b58157d-c7bb.cloud.databricks.com/jobs/737121623984611" target="_blank" class="dqx-link">
+            <a href="{workspace_url}/jobs/{job_id}" target="_blank" class="dqx-link">
                 <span style="font-size:20px; margin-right:6px;">🚀</span>
                 <span style="font-size:16px;">Data Quality Workflow</span>
             </a>
