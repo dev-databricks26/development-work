@@ -241,7 +241,7 @@ try:
             st.session_state.step = 0
         if 'is_loading' not in st.session_state:
             st.session_state.is_loading = False
-            
+
         # 2. Visual Progress Bar (Non-clickable tabs)
         cols = st.columns(len(wizard_steps))
         for i, step_label in enumerate(wizard_steps):
@@ -259,7 +259,6 @@ try:
             cols[i].markdown(f"<hr style='border: 3px solid {line_color}; margin: 0; padding: 0;'>", unsafe_allow_html=True)
 
 
-
         # 3. Navigation Helper Functions
         def go_next(): st.session_state.step += 1
         def go_back(): st.session_state.step -= 1
@@ -267,7 +266,6 @@ try:
 
         # 4. Step Routing Logic
         current = st.session_state.step
-
         if current == 0:
             ui.render_object_overview(cat_select, schema_select, table_select)
             if st.button("Next ➡️", use_container_width=True):
