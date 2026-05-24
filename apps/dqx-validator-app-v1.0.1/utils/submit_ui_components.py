@@ -177,8 +177,8 @@ class UISubmitComponents:
         # 3. Execution Section
         st.subheader("🚀 Execution")
         # 1. Initialize session state to hold workflow results
-        if 'workflow_result' not in st.session_state:
-            st.session_state.workflow_result = None
+        # if 'workflow_result' not in st.session_state:
+        st.session_state.workflow_result = None
 
         if st.button("Apply/Run DQ Rules", type="primary", disabled=not has_rules, use_container_width=True):
             with st.spinner("🚀 Running Workflow to Apply Rules..."):

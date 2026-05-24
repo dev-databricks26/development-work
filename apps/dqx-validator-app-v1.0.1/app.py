@@ -147,7 +147,7 @@ try:
         prev_table = st.session_state.get("prev_table_select", "-- Select --")
         table_select = st.selectbox(
             "Table", 
-            options=[t for t in tables if not (t.endswith("_output") or t.endswith("_quarantine"))], 
+            options=[t for t in tables if not ("_output" in t.lower() or "_quarantine" in t.lower())],
             key="table_select"
         )
         # Reset step if table selection changes
