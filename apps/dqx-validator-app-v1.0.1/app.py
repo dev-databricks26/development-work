@@ -7,8 +7,8 @@ from utils.database_manager import DatabaseManager
 from utils.workflow_manager import WorkflowManager
 from utils.dq_checks_handler import dqx_handler
 from utils.ui_components import UIComponents
-from utils.dqx_ui_components import DqxUIComponents
-from utils.submit_ui_components import UISubmitComponents
+from utils.ui_dqx_components import DqxUIComponents
+from utils.ui_submit_components import UISubmitComponents
 
 # --- 1. Page Configuration ---
 st.set_page_config(layout="wide")
@@ -93,7 +93,7 @@ db_token    = config.get('SQL', 'token')
 workspace_url   = config.get('WORKSPACE', 'workspace_url')
 job_id          = config.get('WORKSPACE', 'job_id')
 dashboard_id    = config.get('WORKSPACE', 'dashboard_id')
-
+org_id          = config.get('WORKSPACE', 'org_id')
 
 # --- 3. Initialize Managers ---
 @st.cache_resource(show_spinner='Initializing Core Services...')
@@ -105,7 +105,6 @@ def init_base_managers():
 
 def get_spark():
     return DatabricksSession.builder.serverless().getOrCreate()
-
 
 try:
     db, wm = init_base_managers()
@@ -178,7 +177,7 @@ try:
                     text-decoration: underline;
                 }}
             </style>
-            <a href="{workspace_url}/dashboardsv3/{dashboard_id}/published" target="_blank" class="dqx-link">
+            <a href="{workspace_url}/dashboardsv3/{dashboard_id}/published?o={org_id}" target="_blank" class="dqx-link">
                 <span style="font-size:20px; margin-right:6px;">📊</span>
                 <span style="font-size:16px;">Data Quality Dashboard</span>
             </a>
