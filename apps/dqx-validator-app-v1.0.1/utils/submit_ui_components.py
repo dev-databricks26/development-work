@@ -5,8 +5,9 @@ import pandas as pd
 import time
 import re
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
 
 
 class UISubmitComponents:
@@ -34,7 +35,24 @@ class UISubmitComponents:
         return user_email
 
 
-    def send_email(self, default_email, run_id, run_url, table_name):
+    def convert_df_to_csv_attachment(self, df: pd.DataFrame, filename: str) -> MIMEApplication:
+        """
+        Converts a pandas DataFrame into an in-memory CSV MIME attachment.
+        """
+        # Convert dataframe to CSV string without saving to disk
+        csv_data = df.to_csv(index=False)
+        
+        # Create the attachment object
+        attachment = MIMEApplication(csv_data, _subtype="csv")
+        attachment.add_header(
+            "Content-Disposition",
+            "attachment",
+            filename=filename
+        )
+        return attachment
+
+
+    def send_email(self, default_email, run_id, run_url, table_name, df: pd.DataFrame):
         smtp_server = self.config.get('EMAIL', 'smtp_server')
         smtp_port = self.config.get('EMAIL', 'smtp_port')
         sender_email = self.config.get('EMAIL', 'address')
@@ -64,7 +82,7 @@ class UISubmitComponents:
             """
 
         # --- HTML Body Construction ---
-        status_color = "#2e7d32"
+        status_color = "#007bff"
         message = "DQX Execution Started"
         body = f"""
         <html>
@@ -103,6 +121,14 @@ class UISubmitComponents:
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'html'))
 
+        # --- CSV Attachment Logic using Helper Function ---
+        try:
+            csv_filename = f"{table_name}_dqx_report.csv"
+            attachment = self.convert_df_to_csv_attachment(df, csv_filename)
+            msg.attach(attachment)
+        except Exception as csv_err:
+            print(f"Error generating CSV attachment: {csv_err}")
+
         # Combine recipients into a unique list of strings for SMTP transmission
         to_addrs = list(set([recipient_email] + cc_email_list))
         try:
@@ -116,6 +142,7 @@ class UISubmitComponents:
             return False, str(e)
 
 
+
     def render_submit(self, cat, schema, table):
         st.divider()
         st.subheader("🏁 Final Review & Execution")
@@ -125,8 +152,9 @@ class UISubmitComponents:
         has_rules = False
 
         # Fetch current mappings from DB
-        dqx_mapped_df = self.db.fetch_dqx_mappings(self.config_catalog, self.config_schema, cat, schema, table)
-        st.dataframe(dqx_mapped_df[["column", "rule_name", "rule_function", "criticality", "arguments"]])
+        dqx_mapped_df = self.db.fetch_dqx_mappings(self.config_catalog, self.config_schema, cat, schema, table)\
+            [["column", "rule_name", "rule_function", "criticality", "arguments"]]
+        st.dataframe(dqx_mapped_df)
 
         if isinstance(dqx_mapped_df, pd.DataFrame) and not dqx_mapped_df.empty:
             has_rules = True
@@ -199,7 +227,8 @@ class UISubmitComponents:
                                 self.config.get('EMAIL', 'address'), 
                                 run_id, 
                                 run_page_url, 
-                                f"{cat}.{schema}.{table}"
+                                f"{cat}.{schema}.{table}",
+                                dqx_mapped_df
                             )
                             email_status = f"✅ Email sent successfully to {recipient_email}!"
                         except Exception:
