@@ -88,7 +88,7 @@ class DqxUIComponents:
         selected_columns = profile_columns.copy()
         st.divider()
 
-        # 1. & 2. BUTTON LOGIC & FIXED SIZING
+        # BUTTON LOGIC & FIXED SIZING
         btn_col1, btn_col2, spacer_mid, dropdown_col, btn_spacer = st.columns([2, 2, 0.5, 1.5, 2])
         
         # Check if summary exists to enable/disable the Save button
@@ -115,13 +115,13 @@ class DqxUIComponents:
             # Optional: Add a small label above if collapsed is too bare
             st.caption("Sample %")
 
-        # 3. Save/Refresh Logic
+        # Save/Refresh Logic
         if save_pressed:
             with st.spinner("Refreshing profile data..."):
                 self.dqx.save_profile_data(full_table_name, all_columns, sample_fraction_percent)
                 st.success(f"Profile data for {full_table_name} updated successfully!")
 
-        # 4. Generate Logic
+        # Generate Logic
         if gen_pressed:
             if not selected_columns:
                 st.error("Please select at least one column.")
@@ -140,7 +140,7 @@ class DqxUIComponents:
                 st.session_state[f"bulk_configs_{full_table_name}"] = self.create_bulk_configs(profile_checks , fresh_rules_df)
                 st.rerun() # Rerun to enable the Save button immediately
 
-        # 5. Display Logic
+        # Display Logic
         if has_generated_data:
             profile_checks_key = f"active_profile_checks_{full_table_name}"
             res_summary_stats = st.session_state[f"active_summary_stats_{full_table_name}"]
@@ -149,12 +149,11 @@ class DqxUIComponents:
             st.dataframe(pd.DataFrame(res_summary_stats), use_container_width=True)
 
             st.subheader("✅ Inferred DQ Rules")
-            # st.dataframe(pd.DataFrame(st.session_state[profile_checks_key]), use_container_width=True)
-
             edited_profile_checks = st.data_editor(
                 pd.DataFrame(st.session_state[profile_checks_key]),
                 use_container_width=True,
                 num_rows="dynamic", 
+                hide_index=True,
                 key=f"editor_{full_table_name}"
             )
             # Convert edited_profile_checks DataFrame to list of dicts for create_bulk_configs
@@ -167,10 +166,8 @@ class DqxUIComponents:
                         row["check"] = json.loads(row["check"].replace("'", '"'))
                 edited_profile_checks_dicts.append(row)
 
-            # # Update session state with edited profile checks
-            # st.session_state[f"active_profile_checks_{full_table_name}"] = edited_profile_checks_dicts
 
-            # 6. Bulk Save Rules Button Logic
+            # Bulk Save Rules Button Logic
             rules_saved_key = f"rules_saved_{full_table_name}"
             if rules_saved_key not in st.session_state:
                 st.session_state[rules_saved_key] = False

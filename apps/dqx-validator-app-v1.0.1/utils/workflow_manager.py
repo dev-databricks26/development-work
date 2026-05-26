@@ -9,7 +9,7 @@ class WorkflowManager:
         self.headers = {"Authorization": f"Bearer {self.token}"}
 
     def trigger_workflow(self, config, full_table_name, receipient_email):
-        
+        """Triggers a workflow and returns the run_id"""
         api_url = f"https://{self.hostname}/api/2.1/jobs/run-now"
         payload = {
             "job_id": self.job_id,
