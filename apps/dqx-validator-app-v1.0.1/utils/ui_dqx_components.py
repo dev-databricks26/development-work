@@ -69,7 +69,6 @@ class DqxUIComponents:
                 st.session_state[f"profile_cols_{full_table_name}"] = all_columns.copy()
                 st.rerun()
 
-
         # --------------------------------------------------------------------------------------
         if f"profile_cols_{full_table_name}" not in st.session_state:
             st.session_state[f"profile_cols_{full_table_name}"] = all_columns.copy()
@@ -149,38 +148,67 @@ class DqxUIComponents:
             st.dataframe(pd.DataFrame(res_summary_stats), use_container_width=True)
 
             st.subheader("✅ Inferred DQ Rules")
+            
+            # Load the original DataFrame
+            df_profile_checks = pd.DataFrame(st.session_state[profile_checks_key])
+            
+            # Append the Select checkbox column to the far right
+            df_profile_checks["select"] = True
+
+            # Render the editor with column configuration
             edited_profile_checks = st.data_editor(
-                pd.DataFrame(st.session_state[profile_checks_key]),
+                df_profile_checks,
                 use_container_width=True,
                 num_rows="dynamic", 
                 hide_index=True,
-                key=f"editor_{full_table_name}"
+                key=f"editor_{full_table_name}",
+                column_config={
+                    "select": st.column_config.CheckboxColumn(
+                        "select",
+                        help="Uncheck to exclude from final output",
+                        default=True,
+                    )
+                }
             )
-            # Convert edited_profile_checks DataFrame to list of dicts for create_bulk_configs
+    
             edited_profile_checks_dicts = []
             for row in edited_profile_checks.to_dict(orient="records"):
-                if isinstance(row.get("check"), str):
-                    try:
-                        row["check"] = eval(row["check"])
-                    except Exception:
-                        row["check"] = json.loads(row["check"].replace("'", '"'))
-                edited_profile_checks_dicts.append(row)
+                if row.get("select") is True:
+                    row.pop("select", None)
+                    if isinstance(row.get("check"), str):
+                        try:
+                            row["check"] = eval(row["check"])
+                        except Exception:
+                            try:
+                                row["check"] = json.loads(row["check"].replace("'", '"'))
+                            except Exception:
+                                pass
+                                
+                    edited_profile_checks_dicts.append(row)
 
 
             # Bulk Save Rules Button Logic
             rules_saved_key = f"rules_saved_{full_table_name}"
+            success_msg_key = f"success_msg_{full_table_name}"
+            
             if rules_saved_key not in st.session_state:
                 st.session_state[rules_saved_key] = False
+            if success_msg_key not in st.session_state:
+                st.session_state[success_msg_key] = None
 
-            if st.button(
+            # Render persistent success message if it exists from a previous run
+            if st.session_state[success_msg_key]:
+                st.success(st.session_state[success_msg_key])
+
+            add_btn = st.button(
                 "💾 Add DQ Rules", 
                 use_container_width=True, 
                 type="primary", 
                 disabled=st.session_state[rules_saved_key]
-            ):
-                # # Use the edited dataframe values instead of the raw session state
+            )
+            if add_btn and not st.session_state[rules_saved_key]:
                 fresh_rules_df = self.db.fetch_rule_definitions(self.config_catalog, self.config_schema)
-                bulk_configs = self.create_bulk_configs(edited_profile_checks_dicts , fresh_rules_df)
+                bulk_configs = self.create_bulk_configs(edited_profile_checks_dicts, fresh_rules_df)
                 
                 with st.spinner("⏳ updating dq rules..."):
                     try:
@@ -192,11 +220,15 @@ class DqxUIComponents:
                             table=table,
                             rules_data=bulk_configs
                         )
+                        # Prepare message and flip state
+                        msg = f"✅ Success! {len(bulk_configs)} rules saved."
+                        st.session_state[success_msg_key] = msg
                         st.session_state[rules_saved_key] = True
-                        st.success(f"✅ Success! {len(bulk_configs)} rules saved.")
-                        # st.rerun() 
+                        # Force rerun to lock button; message will render at the top on restart
+                        st.rerun()
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
+
 
 
     def render_ai_rule_generator(self, cat, schema, table):
@@ -359,7 +391,7 @@ class DqxUIComponents:
                 edited_ai_rules = st.data_editor(
                     rules_df,
                     use_container_width=True,
-                    height=400,
+                    height=200,
                     num_rows="dynamic" if not is_saved else "fixed", 
                     disabled=is_saved,
                     hide_index=True,
