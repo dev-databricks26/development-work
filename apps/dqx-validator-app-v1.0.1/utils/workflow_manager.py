@@ -75,6 +75,53 @@ class WorkflowManager:
                 print(f"Databricks API Error Details: {response.text}")
             raise e
 
+    
+    def create_scheduled_job(self, job_name, cron_expression, timezone_id, config, full_table_name, recipient_email):
+        """Creates a permanent scheduled job in Databricks using the workflow template."""
+        api_url = f"https://{self.hostname}/api/2.1/jobs/create"
+        
+        # Deep copy template to avoid mutating original structure
+        payload = copy.deepcopy(self.workflow_template)
+        
+        # Rename top level structural key from template to match creation requirements
+        if "run_name" in payload:
+            payload.pop("run_name")
+            
+        payload["name"] = job_name
+
+        # Extract parameters dynamically
+        shared_parameters = {
+            "config_catalog_name": config.get('DEFAULT', 'dqx_config_catalog'),
+            "config_schema_name": config.get('DEFAULT', 'dqx_config_schema'),
+            "target_schema_name": f"dqx_{full_table_name.split('.')[1]}",
+            "table_name": full_table_name,
+            "email_sender": config.get('EMAIL', 'address'),
+            "email_recipient": ','.join([recipient_email.strip()] + [e.strip() for e in config.get('EMAIL', 'copy_to').split(',') if e.strip()])
+        }
+
+        # Map parameters to all individual tasks inside payload
+        for task in payload.get("tasks", []):
+            notebook_task = task.get("notebook_task", {})
+            if notebook_task:
+                base_params = notebook_task.get("base_parameters", {})
+                notebook_task["base_parameters"] = {**shared_parameters, **base_params}
+
+        # Add schedule details
+        payload["schedule"] = {
+            "quartz_cron_expression": cron_expression,
+            "timezone_id": timezone_id,
+            "pause_status": "UNPAUSED"
+        }
+
+        # Execute creation API call
+        try:
+            response = requests.post(api_url, headers=self.headers, json=payload)
+            response.raise_for_status()
+            return response
+        except requests.exceptions.HTTPError as e:
+            print(f"Databricks Job Creation Error Details: {response.text}")
+            raise e
+
 
 if __name__ == "__main__":
     manager = WorkflowManager("host", "token", "123","")

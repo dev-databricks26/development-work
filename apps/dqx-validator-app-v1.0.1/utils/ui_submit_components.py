@@ -142,12 +142,72 @@ class UISubmitComponents:
             return False, str(e)
 
 
+    def generate_cron_expression(self, freq, hour, minute, days_of_week=None, day_of_month=None):
+        """Generates a Databricks-compatible Quartz CRON expression."""
+        # Seconds is always 0
+        sec = "0"
+        if freq == "Day":
+            return f"{sec} {minute} {hour} * * ?"
+        
+        elif freq == "Week":
+            if not days_of_week:
+                return None
+            # Map full day names to Quartz 3-letter abbreviations
+            day_map = {"Sunday": "SUN", "Monday": "MON", "Tuesday": "TUE", 
+                       "Wednesday": "WED", "Thursday": "THU", "Friday": "FRI", "Saturday": "SAT"}
+            cron_days = ",".join([day_map[d] for d in days_of_week])
+            return f"{sec} {minute} {hour} ? * {cron_days}"
+        
+        elif freq == "Month":
+            if not day_of_month:
+                return None
+            return f"{sec} {minute} {hour} {day_of_month} * ?"
+        return None
+
+
+    def render_cron_scheduler(self):
+        """Renders functional input widgets for scheduling and returns a CRON string."""
+        st.markdown("---")
+        st.write("📅 **Schedule Settings**")
+        
+        # 1. Frequency Selection
+        frequency = st.selectbox("Frequency", ["Day", "Week", "Month"])
+        
+        # Shared columns for Time Input
+        col1, col2 = st.columns(2)
+        with col1:
+            hour = st.selectbox("Hour (24h)", [f"{i:02d}" for i in range(24)], index=0)
+        with col2:
+            minute = st.selectbox("Minute", [f"{i:02d}" for i in range(0, 60, 1)], index=0) # 1-min intervals for ease
+
+        # 2. Conditional Parameter Sub-Widgets
+        days_of_week = None
+        day_of_month = None
+
+        if frequency == "Week":
+            days_of_week = st.multiselect(
+                "Select Days of Week", 
+                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                default=["Monday"]
+            )
+            if not days_of_week:
+                st.warning("⚠️ Please select at least one day of the week.")
+                
+        elif frequency == "Month":
+            day_of_month = st.selectbox(
+                "Day of the Month", 
+                [str(i) for i in range(1, 32)] + ["L"] # 'L' stands for last day of the month in Quartz CRON
+            )
+
+        # 3. Compute and pass expression back
+        return self.generate_cron_expression(frequency, hour, minute, days_of_week, day_of_month)
+
 
     def render_submit(self, cat, schema, table):
         st.divider()
         st.subheader("🏁 Final Review & Execution")
 
-        # 1. Initialize variables to ensure they exist even if DB call fails
+        # Initialize variables to ensure they exist even if DB call fails
         rules_list = []
         has_rules = False
 
@@ -180,7 +240,7 @@ class UISubmitComponents:
         else:
             st.warning("No active rules found for this table.")
 
-        # 2. Export Section
+        # Export Section ================================================================================= #
         st.markdown("### 📤 Export DQ Rules")
         exp_col1, exp_col2 = st.columns(2)
         
@@ -202,47 +262,102 @@ class UISubmitComponents:
                 disabled=not has_rules
             )
 
-        # Execution Section
+        
+        # Execution Section ================================================================================= #
         st.subheader("🚀 Execution")
-        # Initialize session state to hold workflow results
-        st.session_state.workflow_result = None
 
-        # checkbox for job type
-        is_run_now_checked = st.checkbox("Run Now")
-        # is_scheduled_checked = st.checkbox("Schedule Job")
-        job_type = "run_now" if is_run_now_checked else None
-        button_disabled = not (has_rules and is_run_now_checked)
+        # Initialize session state tracking keys
+        if "run_now_active" not in st.session_state:
+            st.session_state.run_now_active = True
+        if "schedule_active" not in st.session_state:
+            st.session_state.schedule_active = False
+
+        # Create two columns for clean layout alignment
+        col_run, col_sched = st.columns(2)
+
+        with col_run:
+            # Disabled automatically if Schedule Job is checked
+            run_now_checked = st.checkbox(
+                "Run Now", 
+                value=st.session_state.run_now_active,
+                disabled=st.session_state.schedule_active,
+                key="run_now_cb"
+            )
+
+        with col_sched:
+            # Disabled automatically if Run Now is checked
+            schedule_checked = st.checkbox(
+                "Schedule Job", 
+                value=st.session_state.schedule_active,
+                disabled=st.session_state.run_now_cb,
+                key="schedule_cb"
+            )
+
+        # Sync internal execution state variables
+        job_type_selection = "Run Now" if run_now_checked else "Schedule Job"
+        job_type = job_type_selection.upper()
+        cron_expression = None
+        timezone_id = "UTC"
+
+        # Dynamically render and manage scheduling parameters if schedule is active
+        if schedule_checked:
+            cron_expression = self.render_cron_scheduler()
+            if cron_expression:
+                st.caption(f"🎯 **Generated CRON Expression:** `{cron_expression}`")
+            button_disabled = not (has_rules and cron_expression)
+        else:
+            button_disabled = not (has_rules and run_now_checked)
+
 
         # calling the workflow job
         if st.button("Submit", type="primary", disabled=button_disabled, use_container_width=True):
-            with st.spinner("🚀 Running Workflow to Apply Rules..."):
+            with st.spinner("🚀 Processing Workflow Request..."):
                 try:
-                    # call the workflow job
-                    if job_type == 'run_now':
-                        resp =  self.wm.run_now_submit(
-                                    "dqx_run_now",
-                                    self.config, 
-                                    f"{cat}.{schema}.{table}",
-                                    self.get_logged_in_user_email(self.config.get('EMAIL', 'address'))
-                                )
-                        if resp.status_code == 200:
-                            run_id = resp.json().get('run_id')
-                            run_resp = self.wm.get_run_status(run_id)
-                            run_page_url = run_resp.json().get('run_page_url')
-                        else:
-                            st.error(f"Trigger failed: {resp.text}")
-                    else:
-                        run_id = 'None'
-                        run_resp = 'None'
-                        run_page_url = 'None'
+                    full_table_name = f"{cat}.{schema}.{table}"
+                    recipient_email = self.get_logged_in_user_email(self.config.get('EMAIL', 'address'))
 
+                    if job_type == 'RUN NOW':
+                        resp = self.wm.run_now_submit(
+                            f"dqx_run_now_{table}",
+                            self.config, 
+                            full_table_name,
+                            recipient_email
+                        )
+                        if resp.status_code in [200, 201]:
+                            res_id = resp.json().get('run_id')
+                            run_resp = self.wm.get_run_status(res_id)
+                            page_url = run_resp.json().get('run_page_url')
+                            msg = f"🚀 **Triggered Run:** {res_id}"
+                            is_schedule_type = False
+                        else:
+                            st.error(f"Trigger run failed: {resp.text}")
+                            return
+                    
+                    elif job_type == "SCHEDULE JOB":
+                        resp_data = self.wm.create_scheduled_job(
+                            f"dqx_schedule_{table}",
+                            cron_expression,
+                            timezone_id,
+                            self.config,
+                            full_table_name,
+                            recipient_email
+                        )
+                        if resp_data.status_code in [200, 201]:
+                            res_id = resp_data.json().get('job_id')
+                            page_url = f"https://{self.wm.hostname}/#job/{res_id}"
+                            msg = f"📅 **Created Scheduled Job ID:** {res_id}"
+                            is_schedule_type = True
+                        else:
+                            st.error(f"Job schedule failed: {resp.text}")
+                            return
+                        
                     # send email and capture status
                     try:
                         run_status, recipient_email, email_msg = self.send_email(
                             self.config.get('EMAIL', 'address'), 
-                            run_id, 
-                            run_page_url, 
-                            f"{cat}.{schema}.{table}",
+                            res_id, 
+                            page_url, 
+                            full_table_name,
                             dqx_mapped_df
                         )
                         email_status = f"✅ Email sent successfully to {recipient_email}!"
@@ -251,19 +366,22 @@ class UISubmitComponents:
 
                     # Save everything into session state
                     st.session_state.workflow_result = {
-                        "run_id": run_id,
-                        "url": run_page_url,
-                        "email_msg": email_status
+                        "id": res_id,
+                        "url": page_url,
+                        "email_msg": email_status,
+                        "display_msg": msg,
+                        "is_schedule": is_schedule_type
                     }
-                    
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
+                
+                if st.session_state.workflow_result:
+                    res = st.session_state.workflow_result
+                    st.success(res['display_msg'])
+                    if res['url']:
+                        label = "🔗 Open Databricks Job UI" if res['is_schedule'] else "🔗 Open Databricks Job Run"
+                        st.link_button(label, res['url'])
+                    st.info(res['email_msg'])
+                    return 'submitted'
 
-        if st.session_state.workflow_result:
-            res = st.session_state.workflow_result
-            st.success(f"🚀 **Triggered Workflow:** {res['run_id']}")
-            if res['url']:
-                st.link_button("🔗 Open Databricks Job Run", res['url'])
-            st.info(res['email_msg'])
-            return 'submitted'
 
