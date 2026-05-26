@@ -202,46 +202,60 @@ class UISubmitComponents:
                 disabled=not has_rules
             )
 
-        # 3. Execution Section
+        # Execution Section
         st.subheader("🚀 Execution")
-        # 1. Initialize session state to hold workflow results
-        # if 'workflow_result' not in st.session_state:
+        # Initialize session state to hold workflow results
         st.session_state.workflow_result = None
 
-        if st.button("Apply/Run DQ Rules", type="primary", disabled=not has_rules, use_container_width=True):
+        # checkbox for job type
+        is_run_now_checked = st.checkbox("Run Now")
+        # is_scheduled_checked = st.checkbox("Schedule Job")
+        job_type = "run_now" if is_run_now_checked else None
+        button_disabled = not (has_rules and is_run_now_checked)
+
+        # calling the workflow job
+        if st.button("Submit", type="primary", disabled=button_disabled, use_container_width=True):
             with st.spinner("🚀 Running Workflow to Apply Rules..."):
                 try:
-                    resp = self.wm.trigger_workflow(
-                                self.config, 
-                                f"{cat}.{schema}.{table}",
-                                self.get_logged_in_user_email(self.config.get('EMAIL', 'address'))
-                            )
-                    if resp.status_code == 200:
-                        run_id = resp.json().get('run_id')
-                        run_resp = self.wm.get_run_status(run_id)
-                        run_page_url = run_resp.json().get('run_page_url')
-                        
-                        # send email and capture status
-                        try:
-                            run_status, recipient_email, email_msg = self.send_email(
-                                self.config.get('EMAIL', 'address'), 
-                                run_id, 
-                                run_page_url, 
-                                f"{cat}.{schema}.{table}",
-                                dqx_mapped_df
-                            )
-                            email_status = f"✅ Email sent successfully to {recipient_email}!"
-                        except Exception as email_error:
-                            email_status = f"❌ Email notification failed to send. {email_error}"
-
-                        # 2. Save everything into session state
-                        st.session_state.workflow_result = {
-                            "run_id": run_id,
-                            "url": run_page_url,
-                            "email_msg": email_status
-                        }
+                    # call the workflow job
+                    if job_type == 'run_now':
+                        resp =  self.wm.run_now_submit(
+                                    "dqx_run_now",
+                                    self.config, 
+                                    f"{cat}.{schema}.{table}",
+                                    self.get_logged_in_user_email(self.config.get('EMAIL', 'address'))
+                                )
+                        if resp.status_code == 200:
+                            run_id = resp.json().get('run_id')
+                            run_resp = self.wm.get_run_status(run_id)
+                            run_page_url = run_resp.json().get('run_page_url')
+                        else:
+                            st.error(f"Trigger failed: {resp.text}")
                     else:
-                        st.error(f"Trigger failed: {resp.text}")
+                        run_id = 'None'
+                        run_resp = 'None'
+                        run_page_url = 'None'
+
+                    # send email and capture status
+                    try:
+                        run_status, recipient_email, email_msg = self.send_email(
+                            self.config.get('EMAIL', 'address'), 
+                            run_id, 
+                            run_page_url, 
+                            f"{cat}.{schema}.{table}",
+                            dqx_mapped_df
+                        )
+                        email_status = f"✅ Email sent successfully to {recipient_email}!"
+                    except Exception as email_error:
+                        email_status = f"❌ Email notification failed to send. {email_error}"
+
+                    # Save everything into session state
+                    st.session_state.workflow_result = {
+                        "run_id": run_id,
+                        "url": run_page_url,
+                        "email_msg": email_status
+                    }
+                    
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
 
@@ -253,7 +267,3 @@ class UISubmitComponents:
             st.info(res['email_msg'])
             return 'submitted'
 
-
-# if __name__ == "__main__":
-#     UISubmitComponents()
-#     send_email('dev.databricks26@gmail.com', 'test_run_id', 'test_run_page_url', 'test_table')

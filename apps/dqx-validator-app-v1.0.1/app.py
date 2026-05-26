@@ -1,6 +1,7 @@
 import streamlit as st
 import configparser
 from databricks.connect import DatabricksSession
+import json
 
 from utils.state_manager import StateManager
 from utils.database_manager import DatabaseManager
@@ -77,7 +78,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- 2. Load Config & Profile ---
+# --- 2. Load Config, Profile and templates ---
 config = configparser.ConfigParser()
 config.read('config.conf')
 
@@ -95,12 +96,18 @@ job_id          = config.get('WORKSPACE', 'job_id')
 dashboard_id    = config.get('WORKSPACE', 'dashboard_id')
 org_id          = config.get('WORKSPACE', 'org_id')
 
+
+# Load the workflow template
+workflow_payload = None
+with open('workflow_template.json', "r") as f:
+    workflow_payload = json.load(f)
+
 # --- 3. Initialize Managers ---
 @st.cache_resource(show_spinner='Initializing Core Services...')
 def init_base_managers():
     return (
         DatabaseManager(host, http_path, db_token), 
-        WorkflowManager(host, db_token, job_id)
+        WorkflowManager(host, db_token, job_id, workflow_payload)
     )
 
 def get_spark():

@@ -1,0 +1,46 @@
+{
+  "run_name": "{{RUN_NAME}}",
+  "tasks": [
+    {
+      "task_key": "run_checks",
+      "notebook_task": {
+        "notebook_path": "/Repos/dev.databricks26@gmail.com/dqx_accelerator/notebooks/dqx_workflow/dqx_apply_checks",
+        "source": "WORKSPACE",
+        "base_parameters": {}
+      }
+    },
+    {
+      "task_key": "send_email_failure",
+      "depends_on": [
+        {
+          "task_key": "run_checks"
+        }
+      ],
+      "run_if": "AT_LEAST_ONE_FAILED",
+      "notebook_task": {
+        "notebook_path": "/Repos/dev.databricks26@gmail.com/dqx_accelerator/notebooks/dqx_workflow/send_email",
+        "source": "WORKSPACE",
+        "base_parameters": {
+          "status": "0"
+        }
+      }
+    },
+    {
+      "task_key": "send_email_success",
+      "depends_on": [
+        {
+          "task_key": "run_checks"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Repos/dev.databricks26@gmail.com/dqx_accelerator/notebooks/dqx_workflow/send_email",
+        "source": "WORKSPACE",
+        "base_parameters": {
+          "status": "1"
+        }
+      }
+    }
+  ],
+  "performance_target": "PERFORMANCE_OPTIMIZED"
+}
