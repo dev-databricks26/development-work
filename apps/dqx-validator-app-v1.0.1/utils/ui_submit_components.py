@@ -271,25 +271,18 @@ class UISubmitComponents:
             st.session_state.run_now_active = True
         if "schedule_active" not in st.session_state:
             st.session_state.schedule_active = False
-
+        if "submit_clicked" not in st.session_state:
+            st.session_state.submit_clicked = False
+    
         # Create two columns for clean layout alignment
         col_run, col_sched = st.columns(2)
 
         with col_run:
-            # Disabled automatically if Schedule Job is checked
-            run_now_checked = st.checkbox(
-                "Run Now", 
-                value=st.session_state.run_now_active,
-                disabled=st.session_state.schedule_active,
+            run_now_checked = st.checkbox("Run Now", value=st.session_state.run_now_active,disabled=st.session_state.schedule_active,
                 key="run_now_cb"
             )
-
         with col_sched:
-            # Disabled automatically if Run Now is checked
-            schedule_checked = st.checkbox(
-                "Schedule Job", 
-                value=st.session_state.schedule_active,
-                disabled=st.session_state.run_now_cb,
+            schedule_checked = st.checkbox("Schedule Job", value=st.session_state.schedule_active,disabled=st.session_state.run_now_cb,
                 key="schedule_cb"
             )
 
@@ -304,10 +297,9 @@ class UISubmitComponents:
             cron_expression = self.render_cron_scheduler()
             if cron_expression:
                 st.caption(f"🎯 **Generated CRON Expression:** `{cron_expression}`")
-            button_disabled = not (has_rules and cron_expression)
+            button_disabled = not (has_rules and cron_expression) or st.session_state.submit_clicked
         else:
-            button_disabled = not (has_rules and run_now_checked)
-
+            button_disabled = not (has_rules and run_now_checked) or st.session_state.submit_clicked
 
         # calling the workflow job
         if st.button("Submit", type="primary", disabled=button_disabled, use_container_width=True):
@@ -372,6 +364,7 @@ class UISubmitComponents:
                         "display_msg": msg,
                         "is_schedule": is_schedule_type
                     }
+                    st.session_state.submit_clicked = True
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
                 
