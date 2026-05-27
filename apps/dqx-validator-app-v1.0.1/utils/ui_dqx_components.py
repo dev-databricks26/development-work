@@ -256,15 +256,18 @@ class DqxUIComponents:
         # Slider for dynamic column width adjustment
         col_ratio = st.slider(
             "Adjust left/right column width",
-            min_value=0.1, max_value=0.9, value=0.33, step=0.01,
+            min_value=0.1, max_value=0.9, value=0.28, step=0.01,
             help="Adjust the proportion of Table Columns vs AI Rule Generation"
         )
         left_col, right_col = st.columns([col_ratio, 1 - col_ratio])
 
         with left_col:
             st.subheader("Table Columns")
-            columns_df = columns_df.rename(columns={"col_name": "Field Name", "data_type": "Data Type"})
-            st.dataframe(columns_df, use_container_width=True)
+            st.dataframe(
+                columns_df, 
+                column_config={"col_name": "Field Name", "data_type": "Data Type"},
+                hide_index=True
+            )
 
         with right_col:
             detect_col, _ = st.columns([1, 3])
