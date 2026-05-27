@@ -2,6 +2,8 @@ import streamlit as st
 import configparser
 from databricks.connect import DatabricksSession
 import json
+import base64
+import os
 
 from utils.state_manager import StateManager
 from utils.database_manager import DatabaseManager
@@ -11,13 +13,14 @@ from utils.ui_components import UIComponents
 from utils.ui_dqx_components import DqxUIComponents
 from utils.ui_submit_components import UISubmitComponents
 
-# --- 1. Page Configuration ---
+# --- Page Configuration ---
 st.set_page_config(layout="wide")
+app_root = os.getcwd()
 
 # Custom CSS to shift the title up
 st.markdown("""
     <style>
-        /* 1. Force the main container to hug the left edge and use full width */
+        /* Force the main container to hug the left edge and use full width */
         .block-container {
             padding-top: 0rem !important; /* Shipped up by reducing from 1rem to 0rem */
             padding-left: 2rem !important; 
@@ -26,25 +29,25 @@ st.markdown("""
             margin-left: 0px !important;
         }
         
-        /* 2. Remove default Streamlit centering flexbox */
+        /* Remove default Streamlit centering flexbox */
         [data-testid="stMainViewContainer"] {
             align-items: flex-start !important;
         }
 
-        /* 3. Header management */
+        /* Header management */
         [data-testid="stHeader"] {
             background: rgba(0,0,0,0);
             color: transparent;
         }
 
-        /* 4. Shift title up and ensure left alignment */
+        /* Shift title up and ensure left alignment */
         .stHeading h1 {
             margin-top: -45px; /* Shipped up by changing from -20px to -45px */
             padding-top: 0px;
             text-align: left;
         }
 
-        /* 5. Object Name: Removed large left margin to keep it flush */
+        /* Object Name: Removed large left margin to keep it flush */
         .object-name-container {
             margin-top: 10px !important;
             margin-left: 0px !important; 
@@ -54,18 +57,21 @@ st.markdown("""
             font-weight: 500;
         }
 
-        /* 6. Sidebar width constraints */
+        /* Sidebar width constraints */
         [data-testid="stSidebar"] {
             min-width: 250px !important;
             max-width: 300px !important;
         }
 
-        /* Sidebar top padding */
-        [data-testid="stSidebar"] > div:first-child {
-            padding-top: 1rem;
+        /* Target both the inner viewport container and vertical blocks to force logo to the top */
+        [data-testid="stSidebarUserContent"], 
+        [data-testid="stSidebar"] > div:first-child,
+        [data-testid="stSidebarNav"] + div {
+            padding-top: 0rem !important;
+            margin-top: 0px !important;
         }
 
-        /* 7. Wizard/Progress Bar Labels */
+        /* Wizard/Progress Bar Labels */
         .wizard-label {
             height: 30px;
             display: flex;
@@ -134,17 +140,26 @@ try:
     )
 
     with st.sidebar:
-        
-        st.markdown(
-            """
-            <div style="display: flex; justify-content: center;">
-                <img src="https://static.ambitionbox.com/assets/v2/images/rs:fit:1280:960:false:false/aHR0cHM6Ly9tZWRpYS5uYXVrcmkuY29tL21lZGlhL2FiY29tcGxvZ28vdGlnZXItYW5hbHl0aWNzLW9yaWdpbmFsLmpwZw.png" 
-                     width="60px">
-            </div>
-            """, 
-            unsafe_allow_html=True
-        ) 
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        logo_image_path = os.path.join(app_root, "logo", "tiger_logo_croped.png")
+        img_src = ""
+        # Securely check, read, and convert the asset to base64
+        if os.path.exists(logo_image_path):
+            with open(logo_image_path, "rb") as img_file:
+                encoded_string = base64.b64encode(img_file.read()).decode()
+            img_src = f"data:image/png;base64,{encoded_string}"
+        else:
+            st.sidebar.error(f"Logo missing at layout path: {logo_image_path}")
+
+        if img_src:
+            st.markdown(
+                f"""
+                <div style="display: flex; justify-content: center; margin-bottom: 10px;">
+                    <img src="{img_src}" width="60px">
+                </div>
+                """, 
+                unsafe_allow_html=True
+            ) 
+            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
         if st.button("🔄 Reset", use_container_width=True):
             StateManager.reset_portal()
