@@ -212,10 +212,11 @@ class UISubmitComponents:
         has_rules = False
 
         # Fetch current mappings from DB
-        dqx_mapped_df = self.db.fetch_dqx_mappings(self.config_catalog, self.config_schema, cat, schema, table)\
-            [["column", "rule_name", "rule_function", "criticality", "arguments"]]
-        st.dataframe(dqx_mapped_df)
+        dqx_mapped_df = self.db.fetch_dqx_mappings(self.config_catalog, self.config_schema, cat, schema, table)
+        if dqx_mapped_df is not None and not dqx_mapped_df.empty:
+            st.dataframe(dqx_mapped_df[["column", "rule_name", "rule_function", "criticality", "arguments"]])
 
+        # Check if there are any rules defined for the table
         if isinstance(dqx_mapped_df, pd.DataFrame) and not dqx_mapped_df.empty:
             has_rules = True
             for _, row in dqx_mapped_df.iterrows():
