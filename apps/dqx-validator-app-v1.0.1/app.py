@@ -228,30 +228,19 @@ try:
         )
         # 🏷️ App Branding & Version Footer (fixed at bottom of sidebar)
         st.markdown(
-            """
-            <style>
-                .dqx-footer {
-                    position: fixed;
-                    left: 0;
-                    bottom: 30px;
-                    width: 250px;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    opacity: 0.8;
-                    z-index: 100;
-                }
-                @media (max-width: 600px) {
-                    .dqx-footer { width: 100vw; }
-                }
-            </style>
-            <div class="dqx-footer">
-                <span style="font-size: 24px;">🛡️</span>
-                <span style="font-size: 14px; font-weight: 500; margin-top: 2px;">DQX Portal v1.0.1</span>
-            </div>
-            """, 
-            unsafe_allow_html=True
-        )
+                """
+                <style>
+                    [data-testid="stSidebarNavItems"] { display: flex; flex-direction: column; min-height: 75vh; }
+                    .dqx-footer { margin-top: auto; text-align: center; opacity: 0.6; padding-top: 20px; }
+                </style>
+                <div class="dqx-footer">
+                    <div style="font-size: 24px;">🛡️</div>
+                    <div style="font-size: 13px; font-weight: 500;">DQX Portal v1.0.1</div>
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
+
 
     # --- 5. Main Content Area ---
     if cat_select != "-- Select --" and table_select != "-- Select --":

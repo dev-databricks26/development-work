@@ -148,11 +148,9 @@ class DqxUIComponents:
             st.dataframe(pd.DataFrame(res_summary_stats), use_container_width=True)
 
             st.subheader("✅ Inferred DQ Rules")
-            
             # Load the original DataFrame
             df_profile_checks = pd.DataFrame(st.session_state[profile_checks_key])
-            
-            # Append the Select checkbox column to the far right
+            # Append the select checkbox column to the far right
             df_profile_checks["select"] = True
 
             # Render the editor with column configuration
