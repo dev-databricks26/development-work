@@ -228,7 +228,6 @@ class DqxUIComponents:
                         st.error(f"❌ Error: {str(e)}")
 
 
-
     def render_ai_rule_generator(self, cat, schema, table):
         st.subheader("AI-Assisted Rule Generation")
         st.info("Describe your data quality requirements in natural language (e.g., 'Ensure emails follow a valid regex').")
@@ -398,7 +397,7 @@ class DqxUIComponents:
                     rules_df,
                     use_container_width=True,
                     height=200,
-                    num_rows="dynamic" if not is_saved else "fixed", 
+                    num_rows="dynamic",
                     disabled=is_saved,
                     hide_index=True,
                     key=editor_key
