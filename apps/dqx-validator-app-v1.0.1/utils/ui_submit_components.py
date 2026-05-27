@@ -165,47 +165,67 @@ class UISubmitComponents:
         return None
 
 
-    def render_cron_scheduler(self):
+    def render_cron_scheduler(self, disabled=False):
         """Renders functional input widgets for scheduling and returns a CRON string."""
         st.markdown("---")
         st.write("📅 **Schedule Settings**")
         
-        # 1. Frequency Selection
-        frequency = st.selectbox("Frequency", ["Day", "Week", "Month"])
+        # Frequency Selection
+        frequency = st.selectbox("Frequency", ["Day", "Week", "Month"], disabled=disabled
+        )
         
         # Shared columns for Time Input
         col1, col2 = st.columns(2)
         with col1:
-            hour = st.selectbox("Hour (24h)", [f"{i:02d}" for i in range(24)], index=0)
+            hour = st.selectbox("Hour (24h)", [f"{i:02d}" for i in range(24)], index=0, 
+                disabled=disabled
+            )
         with col2:
-            minute = st.selectbox("Minute", [f"{i:02d}" for i in range(0, 60, 1)], index=0) # 1-min intervals for ease
+            minute = st.selectbox("Minute", [f"{i:02d}" for i in range(0, 60, 1)], index=0, 
+                disabled=disabled
+            )
 
-        # 2. Conditional Parameter Sub-Widgets
+        # Conditional Parameter Sub-Widgets
         days_of_week = None
         day_of_month = None
 
         if frequency == "Week":
             days_of_week = st.multiselect(
                 "Select Days of Week", 
-                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-                default=["Monday"]
+                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], default=["Monday"],
+                disabled=disabled
             )
-            if not days_of_week:
+            if not days_of_week and not disabled:
                 st.warning("⚠️ Please select at least one day of the week.")
                 
         elif frequency == "Month":
             day_of_month = st.selectbox(
                 "Day of the Month", 
-                [str(i) for i in range(1, 32)] + ["L"] # 'L' stands for last day of the month in Quartz CRON
+                [str(i) for i in range(1, 32)] + ["L"],
+                disabled=disabled
             )
 
-        # 3. Compute and pass expression back
+        # Compute and pass expression back
         return self.generate_cron_expression(frequency, hour, minute, days_of_week, day_of_month)
+
 
 
     def render_submit(self, cat, schema, table):
         st.divider()
         st.subheader("🏁 Final Review & Execution")
+
+        # Initialize session state tracking keys
+        if "submit_clicked" not in st.session_state:
+            st.session_state.submit_clicked = False
+        if "workflow_result" not in st.session_state:
+            st.session_state.workflow_result = None
+        if "run_now_active" not in st.session_state:
+            st.session_state.run_now_active = True
+        if "schedule_active" not in st.session_state:
+            st.session_state.schedule_active = False
+
+        # Global master switch to lock the UI after submission
+        ui_disabled = st.session_state.submit_clicked
 
         # Initialize variables to ensure they exist even if DB call fails
         rules_list = []
@@ -251,7 +271,7 @@ class UISubmitComponents:
                 data=json.dumps(rules_list, indent=2, default=self.dqx.json_serial),
                 file_name=f"dqx_{table}_config.json",
                 mime="application/json",
-                disabled=not has_rules
+                disabled=ui_disabled or (not has_rules)  # Locked on submit
             )
 
         with exp_col2:
@@ -260,30 +280,28 @@ class UISubmitComponents:
                 data=yaml.dump(rules_list, sort_keys=False),
                 file_name=f"dqx_{table}_config.yaml",
                 mime="text/yaml",
-                disabled=not has_rules
+                disabled=ui_disabled or (not has_rules)  # Locked on submit
             )
 
         
         # Execution Section ================================================================================= #
         st.subheader("🚀 Execution")
-
-        # Initialize session state tracking keys
-        if "run_now_active" not in st.session_state:
-            st.session_state.run_now_active = True
-        if "schedule_active" not in st.session_state:
-            st.session_state.schedule_active = False
-        if "submit_clicked" not in st.session_state:
-            st.session_state.submit_clicked = False
     
         # Create two columns for clean layout alignment
         col_run, col_sched = st.columns(2)
 
         with col_run:
-            run_now_checked = st.checkbox("Run Now", value=st.session_state.run_now_active,disabled=st.session_state.schedule_active,
+            run_now_checked = st.checkbox(
+                "Run Now", 
+                value=st.session_state.run_now_active, 
+                disabled=ui_disabled or st.session_state.schedule_active, # Locked on submit
                 key="run_now_cb"
             )
         with col_sched:
-            schedule_checked = st.checkbox("Schedule Job", value=st.session_state.schedule_active,disabled=st.session_state.run_now_cb,
+            schedule_checked = st.checkbox(
+                "Schedule Job", 
+                value=st.session_state.schedule_active, 
+                disabled=ui_disabled or st.session_state.run_now_cb, # Locked on submit
                 key="schedule_cb"
             )
 
@@ -295,15 +313,20 @@ class UISubmitComponents:
 
         # Dynamically render and manage scheduling parameters if schedule is active
         if schedule_checked:
-            cron_expression = self.render_cron_scheduler()
+            cron_expression = self.render_cron_scheduler(disabled = ui_disabled)
             if cron_expression:
                 st.caption(f"🎯 **Generated CRON Expression:** `{cron_expression}`")
-            button_disabled = not (has_rules and cron_expression) or st.session_state.submit_clicked
+            button_disabled = ui_disabled or not (has_rules and cron_expression)
         else:
-            button_disabled = not (has_rules and run_now_checked) or st.session_state.submit_clicked
+            button_disabled = ui_disabled or not (has_rules and run_now_checked)
 
         # calling the workflow job
         if st.button("Submit", type="primary", disabled=button_disabled, use_container_width=True):
+            st.session_state.submit_clicked = True
+            st.rerun()  # Forces immediate UI lockdown and page update before backend processing
+
+        # Process logic after page reload locks the components
+        if st.session_state.submit_clicked and not st.session_state.workflow_result:
             with st.spinner("🚀 Processing Workflow Request..."):
                 try:
                     full_table_name = f"{cat}.{schema}.{table}"
@@ -324,6 +347,7 @@ class UISubmitComponents:
                             is_schedule_type = False
                         else:
                             st.error(f"Trigger run failed: {resp.text}")
+                            st.session_state.submit_clicked = False # Reset if failed
                             return
                     
                     elif job_type == "SCHEDULE JOB":
@@ -341,7 +365,8 @@ class UISubmitComponents:
                             msg = f"📅 **Created Scheduled Job ID:** {res_id}"
                             is_schedule_type = True
                         else:
-                            st.error(f"Job schedule failed: {resp.text}")
+                            st.error(f"Job schedule failed: {resp_data.text}")
+                            st.session_state.submit_clicked = False # Reset if failed
                             return
                         
                     # send email and capture status
@@ -365,17 +390,20 @@ class UISubmitComponents:
                         "display_msg": msg,
                         "is_schedule": is_schedule_type
                     }
-                    st.session_state.submit_clicked = True
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
+                    st.session_state.submit_clicked = False
                 
-                if st.session_state.workflow_result:
-                    res = st.session_state.workflow_result
-                    st.success(res['display_msg'])
-                    if res['url']:
-                        label = "🔗 Open Databricks Job UI" if res['is_schedule'] else "🔗 Open Databricks Job Run"
-                        st.link_button(label, res['url'])
-                    st.info(res['email_msg'])
-                    return 'submitted'
+        # Persistent display of execution results
+        if st.session_state.workflow_result:
+            res = st.session_state.workflow_result
+            st.success(res['display_msg'])
+            if res['url']:
+                label = "🔗 Open Databricks Job UI" if res['is_schedule'] else "🔗 Open Databricks Job Run"
+                st.link_button(label, res['url'])
+            st.info(res['email_msg'])
+            return 'submitted'
+
 
 

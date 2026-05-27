@@ -134,6 +134,18 @@ try:
     )
 
     with st.sidebar:
+        
+        st.markdown(
+            """
+            <div style="display: flex; justify-content: center;">
+                <img src="https://static.ambitionbox.com/assets/v2/images/rs:fit:1280:960:false:false/aHR0cHM6Ly9tZWRpYS5uYXVrcmkuY29tL21lZGlhL2FiY29tcGxvZ28vdGlnZXItYW5hbHl0aWNzLW9yaWdpbmFsLmpwZw.png" 
+                     width="60px">
+            </div>
+            """, 
+            unsafe_allow_html=True
+        ) 
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
         if st.button("🔄 Reset", use_container_width=True):
             StateManager.reset_portal()
         st.divider()

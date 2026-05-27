@@ -310,13 +310,23 @@ class DqxUIComponents:
                     st.error("No result found.")
 
             # User input
+            st.markdown("""
+                <style>
+                    /* Target the internal textarea element and allow it to size by its content */
+                    [data-testid="stTextArea"] textarea {
+                        field-sizing: content !important;
+                        min-height: 150px !important;
+                    }
+                </style>
+            """, unsafe_allow_html=True)
+
+            # Render the text area without a hardcoded maximum height
             user_prompt = st.text_area(
                 "Define Data Quality in Simple English, Generate DQ Rules(AI)",
                 placeholder="Email addresses must be valid.\nNo null values in 'age'.\nPrimary key must be unique.",
-                height=150,
                 key="ai_prompt_input"
             )
-            
+
             # Disable if PK detection is running OR if Generation already completed successfully
             gen_disabled = st.session_state[pk_running_key] or st.session_state[gen_completed_key]
             gen_pressed = st.button(
