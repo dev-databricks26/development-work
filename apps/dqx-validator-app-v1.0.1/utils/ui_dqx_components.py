@@ -237,12 +237,10 @@ class DqxUIComponents:
 
         columns_df = self.db.fetch_columns(cat, schema, table)
         full_table_name = f"{cat}.{schema}.{table}"
-        
+
         # Session State Keys
         rules_key = f"active_ai_rules_{full_table_name}"
         bulk_key = f"ai_bulk_configs_{full_table_name}"
-        
-        # Button State Trackers
         pk_running_key = f"pk_running_{full_table_name}"
         gen_running_key = f"gen_running_{full_table_name}"
         gen_completed_key = f"gen_completed_{full_table_name}"
@@ -274,8 +272,8 @@ class DqxUIComponents:
         with right_col:
             detect_col, _ = st.columns([1, 3])
             with detect_col:
-                # Disable if Rule Gen is processing OR if Rule Gen has finished running for this session
-                pk_disabled = st.session_state[gen_running_key] or st.session_state[gen_completed_key]
+                # Disable if PK detection or Rule Generation is processing OR has finished running for this session
+                pk_disabled = st.session_state[gen_running_key] or st.session_state[pk_running_key]
                 detect_pk_pressed = st.button(
                     "Detect Primary Keys(AI)", 
                     key=f"detect_pk_{full_table_name}", 

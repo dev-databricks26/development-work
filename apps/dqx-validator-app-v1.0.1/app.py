@@ -154,7 +154,7 @@ try:
             st.markdown(
                 f"""
                 <div style="display: flex; justify-content: center; margin-bottom: 10px;">
-                    <img src="{img_src}" width="60px">
+                    <img src="{img_src}" width="120px">
                 </div>
                 """, 
                 unsafe_allow_html=True
