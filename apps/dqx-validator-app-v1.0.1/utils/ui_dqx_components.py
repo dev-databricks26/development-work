@@ -217,7 +217,7 @@ class DqxUIComponents:
                 type="primary", 
                 disabled=st.session_state[rules_saved_key],
                 on_click=lambda: st.session_state.update({rules_saved_key: True}),
-                key=f"add_btn_widget_{full_table_name}" # Unique key required for on_click tracking
+                key=f"add_btn_widget_{full_table_name}"
             )
             
             if add_btn:
@@ -295,9 +295,7 @@ class DqxUIComponents:
             with detect_col:
                 # Disable if PK detection or Rule Generation is processing OR has finished running for this session
                 pk_disabled = (
-                    st.session_state[gen_running_key] 
-                    or st.session_state[gen_completed_key] 
-                    or st.session_state[pk_running_key]
+                    st.session_state[pk_running_key]
                     or st.session_state[pk_completed_key]
                 )
                 detect_pk_pressed = st.button(
@@ -468,12 +466,15 @@ class DqxUIComponents:
                     st.session_state[bulk_key] = self.create_bulk_configs(active_rules_for_bulk, fresh_rules_df)
 
                 # --- PHASE 3: SAVE TO DB ---
+                save_disabled = is_saved or st.session_state[save_completed_key]
+                # --- PHASE 3: SAVE TO DB ---
                 if st.button(
                     "💾 Save DQ Rules", 
                     use_container_width=True, 
                     type="primary", 
                     key=f"save_btn_{full_table_name}",
-                    disabled=is_saved
+                    disabled=save_disabled,
+                    on_click=lambda: st.session_state.__setitem__(save_completed_key, True)
                 ):
                     bulk_configs = st.session_state.get(bulk_key, [])
 
@@ -491,7 +492,7 @@ class DqxUIComponents:
                                     rules_data=bulk_configs
                                 )
                                 st.success(f"✅ Success! {len(bulk_configs)} dq rules saved to database.")
-                                st.session_state[save_completed_key] = True
+                                # st.session_state[save_completed_key] = True
                             except Exception as e:
                                 st.error(f"❌ Error saving AI-generated rules: {str(e)}")
 
