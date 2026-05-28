@@ -67,7 +67,7 @@ st.markdown("""
         [data-testid="stSidebarUserContent"], 
         [data-testid="stSidebar"] > div:first-child,
         [data-testid="stSidebarNav"] + div {
-            padding-top: 0rem !important;
+            padding-top: 0.5rem !important;
             margin-top: 0px !important;
         }
 
