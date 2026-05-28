@@ -257,6 +257,7 @@ class DqxUIComponents:
         rules_key = f"active_ai_rules_{full_table_name}"
         bulk_key = f"ai_bulk_configs_{full_table_name}"
         pk_running_key = f"pk_running_{full_table_name}"
+        pk_completed_key = f"pk_completed_{full_table_name}"
         gen_running_key = f"gen_running_{full_table_name}"
         gen_completed_key = f"gen_completed_{full_table_name}"
         save_completed_key = f"save_completed_{full_table_name}"
@@ -264,6 +265,8 @@ class DqxUIComponents:
         # Initialize Session States
         if pk_running_key not in st.session_state:
             st.session_state[pk_running_key] = False
+        if pk_completed_key not in st.session_state:
+            st.session_state[pk_completed_key] = False
         if gen_running_key not in st.session_state:
             st.session_state[gen_running_key] = False
         if gen_completed_key not in st.session_state:
@@ -291,21 +294,23 @@ class DqxUIComponents:
             detect_col, _ = st.columns([1, 3])
             with detect_col:
                 # Disable if PK detection or Rule Generation is processing OR has finished running for this session
-                pk_disabled = st.session_state[gen_running_key] or st.session_state[pk_running_key]
+                pk_disabled = (
+                    st.session_state[gen_running_key] 
+                    or st.session_state[gen_completed_key] 
+                    or st.session_state[pk_running_key]
+                    or st.session_state[pk_completed_key]
+                )
                 detect_pk_pressed = st.button(
                     "Detect Primary Keys(AI)", 
                     key=f"detect_pk_{full_table_name}", 
                     type="primary",
-                    disabled=pk_disabled
+                    disabled=pk_disabled,
+                    on_click=lambda: st.session_state.update({pk_running_key: True})
                 )
-            
-            primary_key_checks = None
-            if detect_pk_pressed:
-                st.session_state[pk_running_key] = True
-                st.rerun()
 
+            primary_key_checks = None
             # Handle active execution block for PK detection
-            if st.session_state[pk_running_key]:
+            if st.session_state[pk_running_key] or st.session_state[pk_completed_key]:
                 with st.spinner("Detecting primary key..."):
                     try:
                         primary_key_checks = self.dqx.ai_detect_primary_key(full_table_name)
@@ -314,7 +319,7 @@ class DqxUIComponents:
                         st.error(f"Error detecting primary keys: {str(e)}")
                     finally:
                         st.session_state[pk_running_key] = False
-                        st.rerun()
+                        st.session_state[pk_completed_key] = True       
             else:
                 primary_key_checks = st.session_state.get(f"pk_attempts_{full_table_name}", None)
             
@@ -344,21 +349,22 @@ class DqxUIComponents:
             )
 
             # Disable if PK detection is running OR if Generation already completed successfully
-            gen_disabled = st.session_state[pk_running_key] or st.session_state[gen_completed_key]
+            gen_disabled = (
+                st.session_state[pk_running_key] 
+                or st.session_state[gen_running_key]
+                or st.session_state[gen_completed_key]
+            )
             gen_pressed = st.button(
                 "Generate DQ Rules", 
                 type="primary", 
                 key=f"gen_ai_rules_{full_table_name}",
-                disabled=gen_disabled
+                disabled=gen_disabled,
+                on_click=lambda: st.session_state.__setitem__(gen_running_key, True) if user_prompt.strip() else None
             )
 
-            # --- PHASE 1: GENERATION
-            if gen_pressed:
-                if not user_prompt.strip():
-                    st.warning("Please enter some requirements first.")
-                else:
-                    st.session_state[gen_running_key] = True
-                    st.rerun()
+            # --- PHASE 1: VALIDATION & RERUN TRACKING
+            if gen_pressed and not user_prompt.strip():
+                st.warning("Please enter some requirements first.")
 
             # Handle active execution block for rule generation
             if st.session_state[gen_running_key]:

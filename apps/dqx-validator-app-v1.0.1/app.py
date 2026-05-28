@@ -327,6 +327,7 @@ try:
             if c51.button("⬅️ Back", disabled=(submit_status == 'submitted')): go_back(); st.rerun()
             if c52.button("🏠 Home"):
                 st.session_state.step = 0
+                StateManager.reset_portal()
                 st.rerun()
 
     else:
