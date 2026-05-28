@@ -90,9 +90,18 @@ class DqxUIComponents:
         # BUTTON LOGIC & FIXED SIZING
         btn_col1, btn_col2, spacer_mid, dropdown_col, btn_spacer = st.columns([2, 2, 0.5, 1.5, 2])
         
-        # Check if summary exists to enable/disable the Save button
+        # Generate button: disables itself after first click to prevent duplicate runs
         has_generated_data = f"active_profile_checks_{full_table_name}" in st.session_state
-        gen_pressed = btn_col1.button("Generate Summary & Infer DQ Rules", type="primary", use_container_width=True)
+        if f"gen_pressed_{full_table_name}" not in st.session_state:
+            st.session_state[f"gen_pressed_{full_table_name}"] = False
+        gen_pressed = btn_col1.button(
+            "Generate Summary & Infer DQ Rules",
+            type="primary",
+            use_container_width=True,
+            disabled=st.session_state[f"gen_pressed_{full_table_name}"],
+            on_click=lambda: st.session_state.update({f"gen_pressed_{full_table_name}": True}),
+            key=f"btn_gen_{full_table_name}"
+        )
         
         # Disable "Save Profile Summary" until "Generate" has been run successfully
         save_pressed = btn_col2.button(
@@ -107,7 +116,7 @@ class DqxUIComponents:
             sample_fraction_percent = st.selectbox(
                 "Data %",
                 options=list(range(10, 100)),
-                index=99-10, # Default to 90
+                index=99-10, # Default to 99
                 key=f"sample_pct_{full_table_name}",
                 label_visibility="collapsed" # Keeps UI clean next to buttons
             )
@@ -118,6 +127,7 @@ class DqxUIComponents:
         if save_pressed:
             with st.spinner("Refreshing profile data..."):
                 self.dqx.save_profile_data(full_table_name, all_columns, sample_fraction_percent)
+                st.session_state[f"gen_pressed_{full_table_name}"] = False
                 st.success(f"Profile data for {full_table_name} updated successfully!")
 
         # Generate Logic
@@ -189,6 +199,7 @@ class DqxUIComponents:
             rules_saved_key = f"rules_saved_{full_table_name}"
             success_msg_key = f"success_msg_{full_table_name}"
             
+            # Initialize the state keys if it doesn't exist
             if rules_saved_key not in st.session_state:
                 st.session_state[rules_saved_key] = False
             if success_msg_key not in st.session_state:
@@ -198,13 +209,18 @@ class DqxUIComponents:
             if st.session_state[success_msg_key]:
                 st.success(st.session_state[success_msg_key])
 
+    
+            # Render button with an inline lambda function to lock it instantly on click
             add_btn = st.button(
                 "💾 Add DQ Rules", 
                 use_container_width=True, 
                 type="primary", 
-                disabled=st.session_state[rules_saved_key]
+                disabled=st.session_state[rules_saved_key],
+                on_click=lambda: st.session_state.update({rules_saved_key: True}),
+                key=f"add_btn_widget_{full_table_name}" # Unique key required for on_click tracking
             )
-            if add_btn and not st.session_state[rules_saved_key]:
+            
+            if add_btn:
                 fresh_rules_df = self.db.fetch_rule_definitions(self.config_catalog, self.config_schema)
                 bulk_configs = self.create_bulk_configs(edited_profile_checks_dicts, fresh_rules_df)
                 
@@ -218,14 +234,16 @@ class DqxUIComponents:
                             table=table,
                             rules_data=bulk_configs
                         )
-                        # Prepare message and flip state
+                        # Prepare message and keep state True
                         msg = f"✅ Success! {len(bulk_configs)} rules saved."
                         st.session_state[success_msg_key] = msg
-                        st.session_state[rules_saved_key] = True
-                        # Force rerun to lock button; message will render at the top on restart
                         st.rerun()
                     except Exception as e:
+                        # Reset state on error so the user can try clicking again
+                        st.session_state[rules_saved_key] = False
                         st.error(f"❌ Error: {str(e)}")
+                        st.rerun()
+
 
 
     def render_ai_rule_generator(self, cat, schema, table):
