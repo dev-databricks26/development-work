@@ -131,7 +131,7 @@ class UIComponents:
                     display_rules.reset_index(drop=True, inplace=True)
 
                     with st.expander(f"📜 Existing Rules for {col_name} ({len(display_rules)})", expanded=False):
-                        t_cols = st.columns([2, 2, 2, 2, 1])
+                        t_cols = st.columns([2, 1, 2, 2, 1])
                         t_cols[0].write("**Rule Name**")
                         t_cols[1].write("**Criticality**")
                         t_cols[2].write("**Arguments**")
@@ -141,10 +141,10 @@ class UIComponents:
 
                         for _, e_row in display_rules.iterrows():
                             r_id = str(e_row['rule_id'])
-                            r_cols = st.columns([2, 2, 2, 2, 1])
+                            r_cols = st.columns([2, 1, 2, 2, 1])
                             r_cols[0].write(e_row['rule_name'])
                             r_cols[1].code(e_row['criticality'])
-                            r_cols[2].code(e_row['arguments'])
+                            r_cols[2].markdown(f"`{str(e_row['arguments'])}`")
                             r_cols[3].write(e_row['rule_description'])
                             
                             # If user clicks X, add rule_id to session state and rerun to update UI
