@@ -297,9 +297,10 @@ try:
 
         elif current == 1:
             ui.render_active_dq_rules(cat_select, schema_select, table_select)
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             if c1.button("⬅️ Back"): go_back(); st.rerun()
-            if c2.button("Next ➡️"): go_next(); st.rerun()
+            if c2.button("Skip to Update ⏭️"): skip_to_update(); st.rerun()
+            if c3.button("Next ➡️"): go_next(); st.rerun()
 
         elif current == 2:
             dqx_ui.render_profile_rule_generator(cat_select, schema_select, table_select)

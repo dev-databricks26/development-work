@@ -80,28 +80,11 @@ class UIComponents:
         st.divider()
 
 
-    def render_add_rules_mapping(self, cat, schema, table):
-        st.subheader("📝 Create/Modify Rules Manually")
-        col_title, col_reset, col_refresh = st.columns([8, 2, 2])
-        if col_reset.button("🔄Reset", use_container_width=True, help="Reset all inputs and column visibility"):
-            self.reset_configuration_form()
-        if col_refresh.button("🌀Reload", use_container_width=True, help="Clear cache and refresh panel"):
-            self.db.fetch_dqx_mappings.clear(self.config_catalog, self.config_schema, cat, schema, table)
-            st.rerun()
-        # ---------------------------------------
-
-        # 1. Fetch metadata needed for the form
-        dims = self.db.fetch_rule_dimensions(self.config_catalog, self.config_schema)
-        df_rules = self.db.fetch_rule_definitions(self.config_catalog, self.config_schema)
-        df_cols = self.db.fetch_columns(cat, schema, table)
-
-        # --- NEW: Fetch Existing Mappings for this Table ---
-        df_existing = self.db.fetch_dqx_mappings(self.config_catalog, self.config_schema, cat, schema, table).reset_index(drop=True)
-        df_existing = df_existing.loc[:, ~df_existing.columns.duplicated()].copy()
-        df_existing.reset_index(drop=True, inplace=True)
-        
-        bulk_configs = []
-        all_args_filled = True
+    @st.fragment
+    def _render_dynamic_rules_grid(self, df_cols, df_existing, dims, df_rules, cat, schema, table):
+        # Reset tracking states at the start of every fragment render cycle
+        st.session_state.bulk_configs = []
+        st.session_state.all_args_filled = True
         
         # Table Header
         h_cols = st.columns([2, 1.5, 2, 1.2, 2, 0.4, 0.4])
@@ -112,20 +95,19 @@ class UIComponents:
         # 2. Render Row-by-Row Configuration
         for idx, row in df_cols.iterrows():
             col_name = row['col_name']
-            if col_name in st.session_state.get('hidden_columns', set()): 
+            if col_name in st.session_state.hidden_columns: 
                 continue
             
-            # --- EXISTING RULES SECTION (Corrected Logic) ---
+            # --- EXISTING RULES SECTION ---
             if not df_existing.empty:
                 col_rules = df_existing[df_existing['column'] == col_name]
                 
-                # Initialize session state for tracking deactivations
                 deactivate_key = f"rules_to_deactivate_{col_name}"
                 if deactivate_key not in st.session_state:
                     st.session_state[deactivate_key] = []
 
                 if not col_rules.empty:
-                    # Filter for active rules AND rules not currently marked for deactivation in this session
+                    # Filter for active rules AND rules not currently marked for deactivation
                     active_col_rules = col_rules[col_rules.get('is_active', True) == True]
                     display_rules = active_col_rules[~active_col_rules['rule_id'].astype(str).isin(st.session_state[deactivate_key])].copy()
                     display_rules.reset_index(drop=True, inplace=True)
@@ -147,10 +129,10 @@ class UIComponents:
                             r_cols[2].markdown(f"`{str(e_row['arguments'])}`")
                             r_cols[3].write(e_row['rule_description'])
                             
-                            # If user clicks X, add rule_id to session state and rerun to update UI
+                            # Instant local removal inside fragment scope
                             if r_cols[4].button("❌", key=f"btn_deact_{col_name}_{r_id}"):
                                 st.session_state[deactivate_key].append(r_id)
-                                st.rerun()
+                                st.rerun(scope="fragment")
 
                         # Action Footer
                         if st.session_state[deactivate_key]:
@@ -169,24 +151,21 @@ class UIComponents:
                                         r_id_to_del
                                     )
                                 
-                                # Clear session state and cache
                                 st.session_state[deactivate_key] = []
-                                # Important: Use your specific DB clear method
-                                self.db.fetch_dqx_mappings.clear(self.db, self.config_catalog, self.config_schema, cat, schema, table)
+                                self.db.fetch_dqx_mappings.clear(self.config_catalog, self.config_schema, cat, schema, table)
                                 st.cache_data.clear()
                                 st.success("Changes saved to database!")
-                                st.rerun()
+                                st.rerun()  # Parent-level refresh needed to sync raw database state
                             
                             if b_col2.button("↩️Undo", key=f"undo_{col_name}"):
                                 st.session_state[deactivate_key] = []
-                                st.rerun()
-
+                                st.rerun(scope="fragment")
 
             if col_name not in st.session_state.column_rule_counts:
                 st.session_state.column_rule_counts[col_name] = 1
 
             for i in range(st.session_state.column_rule_counts[col_name]):
-                row_key = f"t4_{col_name}_{i}_{idx}"  # Add idx to ensure uniqueness
+                row_key = f"t4_{col_name}_{i}_{idx}"
                 r_c1, r_c2, r_c3, r_c4, r_c5, r_c6, r_c7 = st.columns([2, 1.5, 2, 1.2, 2, 0.4, 0.4])
                 
                 # Column Name & Hide Logic
@@ -195,7 +174,7 @@ class UIComponents:
                     hide_btn_key = f"hide_{col_name}_{idx}"
                     if sub[0].button("🗑️", key=hide_btn_key):
                         st.session_state.hidden_columns.add(col_name)
-                        st.rerun()
+                        st.rerun(scope="fragment")
                     sub[1].markdown(f"**{col_name}**")
                 else:
                     r_c1.markdown(f"↳ *{col_name}*")
@@ -225,10 +204,10 @@ class UIComponents:
                 # Add/Remove Row Buttons
                 if r_c6.button("➕", key=f"add_{row_key}"):
                     st.session_state.column_rule_counts[col_name] += 1
-                    st.rerun()
+                    st.rerun(scope="fragment")
                 if st.session_state.column_rule_counts[col_name] > 1 and r_c7.button("➖", key=f"rem_{row_key}"):
                     st.session_state.column_rule_counts[col_name] -= 1
-                    st.rerun()
+                    st.rerun(scope="fragment")
 
                 # Collect configuration if rule is selected
                 if sel_rule != "-- Skip --":
@@ -239,38 +218,74 @@ class UIComponents:
                     except ValueError:
                         is_valid_json = False
 
-                    if not args.strip() and p_req==True:
+                    if not args.strip() and p_req:
                         r_c5.error("Required ⚠️")
-                        all_args_filled = False
+                        st.session_state.all_args_filled = False
                     elif not is_valid_json:
                         r_c5.error("Invalid JSON ❌")
-                        all_args_filled = False
+                        st.session_state.all_args_filled = False
                     else:
-                        bulk_configs.append({
+                        st.session_state.bulk_configs.append({
                             "col": col_name, 
                             "rid": sel_rule.split(" - ")[0].strip(), 
                             "crit": crit, 
-                            "args": args if p_req else p_val
+                            "args": args if args.strip() else p_val
                         })
 
+
+    def render_add_rules_mapping(self, cat, schema, table):
+        st.subheader("📝 Create/Modify Rules Manually")
+        col_title, col_reset, col_refresh = st.columns([8, 2, 2])
+        if col_reset.button("🔄Reset", use_container_width=True, help="Reset all inputs and column visibility"):
+            self.reset_configuration_form()
+        if col_refresh.button("🌀Reload", use_container_width=True, help="Clear cache and refresh panel"):
+            self.db.fetch_dqx_mappings.clear(self.config_catalog, self.config_schema, cat, schema, table)
+            st.rerun()
+        # ---------------------------------------
+
+        # 1. Fetch metadata needed for the form
+        dims = self.db.fetch_rule_dimensions(self.config_catalog, self.config_schema)
+        df_rules = self.db.fetch_rule_definitions(self.config_catalog, self.config_schema)
+        df_cols = self.db.fetch_columns(cat, schema, table)
+
+        # --- NEW: Fetch Existing Mappings for this Table ---
+        df_existing = self.db.fetch_dqx_mappings(self.config_catalog, self.config_schema, cat, schema, table).reset_index(drop=True)
+        df_existing = df_existing.loc[:, ~df_existing.columns.duplicated()].copy()
+        df_existing.reset_index(drop=True, inplace=True)
+        
+        # Initialize cross-fragment session state storage
+        if 'bulk_configs' not in st.session_state:
+            st.session_state.bulk_configs = []
+        if 'all_args_filled' not in st.session_state:
+            st.session_state.all_args_filled = True
+        if 'hidden_columns' not in st.session_state:
+            st.session_state.hidden_columns = set()
+        if 'column_rule_counts' not in st.session_state:
+            st.session_state.column_rule_counts = {}
+
+        # 2. Render Row-by-Row Configuration (Calls the `@st.fragment` grid)
+        self._render_dynamic_rules_grid(df_cols, df_existing, dims, df_rules, cat, schema, table)
         st.divider()
 
-        # 3. Registration Logic
+        # 3. Registration Logic (Reads directly from Session State)
+        bulk_configs = st.session_state.bulk_configs
+        all_args_filled = st.session_state.all_args_filled
+
         if bulk_configs:
             if not all_args_filled:
                 st.warning("⚠️ Some selected rules are missing required Arguments. Please fill them to continue.")
 
             st.write(f"Ready to register **{len(bulk_configs)}** rules.")
-            if st.button("Register Rules", type="primary", disabled=not all_args_filled):
+            if st.button("Register Rules", type="primary", disabled=not all_args_filled, use_container_width=True):
                 success_count = 0
                 error_logs = []
                 progress_bar = st.progress(0)
-                # Using the empty string spinner as you requested
-                with st.spinner("Registring rules..."):
+                
+                with st.spinner("Registering rules..."):
                     total_rules = len(bulk_configs)
                     for entry in bulk_configs:
                         try:
-                            # Validate JSON
+                            # Validate JSON structures
                             a_dict = json.loads(entry['args']) if entry['args'].strip() else {}
                             
                             success, msg = self.db.register_dq_rule(
@@ -287,16 +302,18 @@ class UIComponents:
                         except Exception as e:
                             error_logs.append(f"Unexpected error for {entry['col']}: {str(e)}")
                         
-                        # Update progress bar (0.0 to 1.0)
+                        # Update registration progress
                         progress_bar.progress((success_count + len(error_logs)) / total_rules)
 
                 if success_count > 0:
-                    self.db.fetch_dqx_mappings.clear(self.db, self.config_catalog, self.config_schema, cat, schema, table)
+                    # Clean cache and trigger target view layout refresh
+                    self.db.fetch_dqx_mappings.clear(self.config_catalog, self.config_schema, cat, schema, table)
                     st.cache_data.clear()
                     st.session_state.show_execution_summary = True
                     st.success(f"Successfully registered {success_count} rules!")
                     time.sleep(1)
                     progress_bar.empty()
                     st.rerun()
+                
                 for err in error_logs:
                     st.error(err)
