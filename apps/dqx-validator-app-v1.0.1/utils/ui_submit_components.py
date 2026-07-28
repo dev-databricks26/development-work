@@ -52,7 +52,7 @@ class UISubmitComponents:
         return attachment
 
 
-    def send_email(self, default_email, run_id, run_url, table_name, df: pd.DataFrame):
+    def send_email(self, default_email, run_config, page_url, table_name, df: pd.DataFrame):
         smtp_server = self.config.get('EMAIL', 'smtp_server')
         smtp_port = self.config.get('EMAIL', 'smtp_port')
         sender_email = self.config.get('EMAIL', 'address')
@@ -64,14 +64,11 @@ class UISubmitComponents:
         recipient_email = self.get_logged_in_user_email(default_email)
         print("recipient_email ==> ", recipient_email)
 
-        subject = f"DQX Check Triggered for Table | {table_name}"
+        subject = f'DQX Check {run_config["Status"]} for Table | {table_name}'
+        view_msg = "View Databricks Run" if "Run ID" in run_config else "View Databricks Job"
         # --- Dynamic Rows Generation for the Box ---
-        run_details = {
-            "Workspace": f"{self.config.get('WORKSPACE', 'workspace_url')}",
-            "Job": f"DQX_Run_Checks [{self.config.get('WORKSPACE', 'job_id')}]",
-            "Job Run": run_id,
-            "Status": "Triggered"
-        }
+        run_details = run_config
+
         table_rows = ""
         for key, value in run_details.items():
             table_rows += f"""
@@ -83,7 +80,7 @@ class UISubmitComponents:
 
         # --- HTML Body Construction ---
         status_color = "#007bff"
-        message = "DQX Execution Started"
+        message = f'DQX Execution {run_config["Status"]}'
         body = f"""
         <html>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -109,7 +106,7 @@ class UISubmitComponents:
                 </table>
             </div>
             <p style="font-size: 0.8em; color: #666;">This is an automated notification from the DQX UI.</p>
-            <p><a href="{run_url}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View Databricks Run</a></p>
+            <p><a href="{page_url}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">{view_msg}</a></p>
         </body>
         </html>
         """
@@ -332,6 +329,11 @@ class UISubmitComponents:
                     full_table_name = f"{cat}.{schema}.{table}"
                     recipient_email = self.get_logged_in_user_email(self.config.get('EMAIL', 'address'))
 
+                    run_config = {
+                        "Workspace": f"{self.config.get('WORKSPACE', 'workspace_url')}",
+                        "Job": f"DQX_Run_Checks [{self.config.get('WORKSPACE', 'job_id')}]"
+                    }
+
                     if job_type == 'RUN NOW':
                         resp = self.wm.run_now_submit(
                             f"dqx_run_now_{table}",
@@ -347,9 +349,12 @@ class UISubmitComponents:
                             is_schedule_type = False
                         else:
                             st.error(f"Trigger run failed: {resp.text}")
-                            st.session_state.submit_clicked = False # Reset if failed
+                            st.session_state.submit_clicked = False
                             return
-                    
+
+                        run_config["Run ID"]=res_id
+                        run_config["Status"]="Triggered"
+
                     elif job_type == "SCHEDULE JOB":
                         resp_data = self.wm.create_scheduled_job(
                             f"dqx_schedule_{table}",
@@ -369,12 +374,15 @@ class UISubmitComponents:
                             st.session_state.submit_clicked = False # Reset if failed
                             return
                         
+                        run_config["Job ID"]=res_id
+                        run_config["Status"]="Scheduled"
+
                     # send email and capture status
                     try:
                         run_status, recipient_email, email_msg = self.send_email(
                             self.config.get('EMAIL', 'address'), 
-                            res_id, 
-                            page_url, 
+                            run_config, 
+                            page_url,
                             full_table_name,
                             dqx_mapped_df
                         )
